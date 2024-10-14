@@ -1,0 +1,73 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+
+  user-service:
+    image: ${USER_SERVICE_IMAGE:-user-management-service}
+    build:
+      context: ./user-management-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    depends_on:
+      - kafka
+      - mysql-userdb
+    networks:
+      - kafka_network
+
+  journal-service:
+    image: ${JOURNAL_SERVICE_IMAGE:-journal-event-service}
+    build:
+      context: ./journal-event-service
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    depends_on:
+      - kafka
+      - mysql-journaldb
+    networks:
+      - kafka_network
+
+  mysql-userdb:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: userdb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql-userdb-data:/var/lib/mysql
+
+  mysql-journaldb:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: journaldb
+      MYSQL_USER: journal_user
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./mysql-journaldb-data:/var/lib/mysql
+
+networks:
+  kafka_network:
+    driver: bridge
